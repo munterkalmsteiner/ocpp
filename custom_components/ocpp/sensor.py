@@ -51,8 +51,8 @@ async def async_setup_entry(hass, entry, async_add_devices):
     device_type = entry.data.get(CONF_DEVICE_TYPE, DEFAULT_DEVICE_TYPE)
 
     if device_type == DEVICE_TYPE_CHARGE_POINT:
-        cs_id = entry.data.get(CONF_CS_ID, DEFAULT_CS_ID)
-        cp_id = entry.data.get(CONF_CP_ID, DEFAULT_CP_ID)
+        cs_id = entry.options.get(CONF_CS_ID, DEFAULT_CS_ID)
+        cp_id = entry.options.get(CONF_CP_ID, DEFAULT_CP_ID)
         central_system = hass.data[DOMAIN][DEVICE_TYPE_CENTRAL_SYSTEM][cs_id]
         entities = []
         sensors = []

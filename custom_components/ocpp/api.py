@@ -237,12 +237,12 @@ class CentralSystem:
         cp_id = cp_id[cp_id.rfind("/") + 1 :]
 
         if cp_id not in self.charge_points:
-            if cp_id in self.hass.domain[DOMAIN][DEVICE_TYPE_CHARGE_POINT]:
+            if cp_id in self.hass.data[DOMAIN][DEVICE_TYPE_CHARGE_POINT]:
                 _LOGGER.info(
                     f"Known charge point {cp_id} connected to {self.host}:{self.port}."
                 )
-                charge_point = self.hass.domain[DOMAIN][DEVICE_TYPE_CHARGE_POINT]
-                self.charge_points[self.cp_id] = charge_point
+                charge_point = self.hass.data[DOMAIN][DEVICE_TYPE_CHARGE_POINT][cp_id]
+                self.charge_points[cp_id] = charge_point
                 await charge_point.start(websocket)
             else:
                 _LOGGER.info(
@@ -250,7 +250,7 @@ class CentralSystem:
                 )
         else:
             _LOGGER.info(f"Charger {cp_id} reconnected to {self.host}:{self.port}.")
-            charge_point: ChargePoint = self.charge_points[self.cp_id]
+            charge_point: ChargePoint = self.charge_points[cp_id]
             await charge_point.reconnect(websocket)
         _LOGGER.info(f"Charger {cp_id} disconnected from {self.host}:{self.port}.")
 
@@ -343,6 +343,7 @@ class ChargePoint(cp):
         self.hass = hass
         self.entry = entry
         self.config = entry.options
+        self.cs_id = self.config.get(CONF_CS_ID, DEFAULT_CS_ID)
 
         for action in self.route_map:
             self.route_map[action]["_skip_schema_validation"] = self.config.get(
@@ -375,7 +376,7 @@ class ChargePoint(cp):
         """Update entities in HA."""
         er = entity_registry.async_get(self.hass)
         dr = device_registry.async_get(self.hass)
-        identifiers = {(DOMAIN, f"{DEVICE_TYPE_CHARGE_POINT}.{self.cp_id}")}
+        identifiers = {(DOMAIN, f"{DEVICE_TYPE_CHARGE_POINT}.{self.id}")}
         dev = dr.async_get_device(identifiers)
         # _LOGGER.info("Device id: %s updating", dev.name)
         for ent in entity_registry.async_entries_for_device(er, dev.id):
@@ -985,21 +986,21 @@ class ChargePoint(cp):
                 time2 = time.perf_counter()
                 latency_pong = round(time2 - time1, 3) * 1000
                 _LOGGER.debug(
-                    f"Connection latency from '{self.cs_id}' to '{self.cp_id}': ping={latency_ping} ms, pong={latency_pong} ms",
+                    f"Connection latency from '{self.cs_id}' to '{self.id}': ping={latency_ping} ms, pong={latency_pong} ms",
                 )
                 self._metrics[cstat.latency_ping.value].value = latency_ping
                 self._metrics[cstat.latency_pong.value].value = latency_pong
 
             except asyncio.TimeoutError as timeout_exception:
                 _LOGGER.debug(
-                    f"Connection latency from '{self.cs_id}' to '{self.cp_id}': ping={latency_ping} ms, pong={latency_pong} ms",
+                    f"Connection latency from '{self.cs_id}' to '{self.id}': ping={latency_ping} ms, pong={latency_pong} ms",
                 )
                 self._metrics[cstat.latency_ping.value].value = latency_ping
                 self._metrics[cstat.latency_pong.value].value = latency_pong
                 timeout_counter += 1
                 if timeout_counter > websocket_ping_tries:
                     _LOGGER.debug(
-                        f"Connection to '{self.cp_id}' timed out after '{websocket_ping_tries}' ping tries",
+                        f"Connection to '{self.id}' timed out after '{websocket_ping_tries}' ping tries",
                     )
                     raise timeout_exception
                 else:
@@ -1039,10 +1040,10 @@ class ChargePoint(cp):
     async def stop(self):
         """Close connection and cancel ongoing tasks."""
         self.status = STATE_UNAVAILABLE
-        if self._connection.open:
+        if self._connection and self._connection.open:
             _LOGGER.debug(f"Closing websocket to '{self.id}'")
             await self._connection.close()
-        for task in self.tasks:
+        for task in self.tasks or []:
             task.cancel()
 
     async def reconnect(self, connection: websockets.server.WebSocketServerProtocol):
@@ -1063,9 +1064,9 @@ class ChargePoint(cp):
     async def async_update_device_info(self, boot_info: dict):
         """Update device info asynchronuously."""
 
-        _LOGGER.debug("Updating device info %s: %s", self.cp_id, boot_info)
+        _LOGGER.debug("Updating device info %s: %s", self.id, boot_info)
         identifiers = {
-            (DOMAIN, f"{DEVICE_TYPE_CHARGE_POINT}.{self.cp_id}"),
+            (DOMAIN, f"{DEVICE_TYPE_CHARGE_POINT}.{self.id}"),
         }
         serial = boot_info.get(om.charge_point_serial_number.name, None)
         if serial is not None:
@@ -1075,7 +1076,7 @@ class ChargePoint(cp):
         registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers=identifiers,
-            name=self.cp_id,
+            name=self.id,
             manufacturer=boot_info.get(om.charge_point_vendor.name, None),
             model=boot_info.get(om.charge_point_model.name, None),
             suggested_area="Garage",
@@ -1490,7 +1491,7 @@ class ChargePoint(cp):
     def get_ha_metric(self, measurand: str):
         """Return last known value in HA for given measurand."""
         entity_id = "sensor." + "_".join(
-            [self.cp_id.lower(), measurand.lower().replace(".", "_")]
+            [self.id.lower(), measurand.lower().replace(".", "_")]
         )
         try:
             value = self.hass.states.get(entity_id).state

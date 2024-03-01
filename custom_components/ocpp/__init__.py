@@ -47,8 +47,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     manufacturer = "OCPP"
     model = device_type
     via_device = None
-    cs_id = entry.data.get(CONF_CS_ID, DEFAULT_CS_ID)
-    cp_id = entry.data.get(CONF_CP_ID, DEFAULT_CP_ID)
+    cs_id = entry.options.get(CONF_CS_ID, DEFAULT_CS_ID)
+    cp_id = entry.options.get(CONF_CP_ID, DEFAULT_CP_ID)
 
     identifier = None
 
@@ -60,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if device_type == DEVICE_TYPE_CHARGE_POINT:
         identifier = cp_id
         charge_point = ChargePoint(cp_id, hass, entry)
-        hass.data[DOMAIN][DEVICE_TYPE_CENTRAL_SYSTEM][cp_id] = charge_point
+        hass.data[DOMAIN][DEVICE_TYPE_CHARGE_POINT][cp_id] = charge_point
         via_device = (DOMAIN, f"{DEVICE_TYPE_CENTRAL_SYSTEM}.{cs_id}")
 
     if device_type == DEVICE_TYPE_TAG:
@@ -90,7 +90,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_type = entry.data.get(CONF_DEVICE_TYPE)
 
     if device_type == DEVICE_TYPE_CENTRAL_SYSTEM:
-        cs_id = entry.data.get(CONF_CS_ID)
+        cs_id = entry.options.get(CONF_CS_ID)
         central_sys = hass.data[DOMAIN][DEVICE_TYPE_CENTRAL_SYSTEM][cs_id]
         if central_sys:
             # TODO: fix protected member usage
@@ -100,8 +100,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if unloaded:
             hass.data[DOMAIN][DEVICE_TYPE_CENTRAL_SYSTEM].pop(cs_id)
     if device_type == DEVICE_TYPE_CHARGE_POINT:
-        cp_id = entry.data.get(CONF_CP_ID)
-        charge_point = hass.data[DOMAIN][device_type][cp_id]
+        cp_id = entry.options.get(CONF_CP_ID)
+        charge_point = hass.data[DOMAIN][DEVICE_TYPE_CHARGE_POINT][cp_id]
         await charge_point.stop()
         unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         if unloaded:

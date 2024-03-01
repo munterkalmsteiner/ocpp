@@ -80,8 +80,8 @@ async def async_setup_entry(hass, entry, async_add_devices):
         entry.data.get(CONF_DEVICE_TYPE, DEFAULT_DEVICE_TYPE)
         == DEVICE_TYPE_CHARGE_POINT
     ):
-        cs_id = entry.data.get(CONF_CS_ID, DEFAULT_CS_ID)
-        cp_id = entry.data.get(CONF_CP_ID, DEFAULT_CP_ID)
+        cs_id = entry.options.get(CONF_CS_ID, DEFAULT_CS_ID)
+        cp_id = entry.options.get(CONF_CP_ID, DEFAULT_CP_ID)
 
         central_system = hass.data[DOMAIN][DEVICE_TYPE_CENTRAL_SYSTEM][cs_id]
 
@@ -115,7 +115,7 @@ class ChargePointSwitch(SwitchEntity):
         )
         self._attr_name = self.entity_description.name
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self.cp_id)},
+            identifiers={(DOMAIN, f"{DEVICE_TYPE_CHARGE_POINT}.{self.cp_id}")},
             via_device=(DOMAIN, self.central_system.cs_id),
         )
 
